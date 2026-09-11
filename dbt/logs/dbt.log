@@ -1,0 +1,74 @@
+[0m20:48:11.156432 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'start', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x000002499FA2E7B0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x00000249A2207ED0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x00000249A22079D0>]}
+
+
+============================== 20:48:11.163044 | 9049eb98-19bf-4ef4-a629-196a8d16c6f0 ==============================
+[0m20:48:11.163044 [info ] [MainThread]: Running with dbt=1.12.4
+[0m20:48:11.163795 [debug] [MainThread]: running dbt with arguments {'version_check': 'True', 'no_print': 'None', 'static_parser': 'True', 'warn_error_options': 'WarnErrorOptionsV2(error=[], warn=[], silence=[])', 'maximum_seed_size_mib': '1', 'target_path': 'None', 'printer_width': '80', 'write_json': 'True', 'empty': 'None', 'log_cache_events': 'False', 'introspect': 'True', 'cache_selected_only': 'False', 'fail_fast': 'False', 'debug': 'False', 'log_format': 'default', 'partial_parse': 'True', 'send_anonymous_usage_stats': 'True', 'quiet': 'False', 'warn_error': 'None', 'profiles_dir': 'C:\\Users\\Maria\\.dbt', 'use_colors': 'True', 'hints_enabled': 'True', 'indirect_selection': 'eager', 'use_experimental_parser': 'False', 'invocation_command': 'dbt init mercado_pago', 'log_path': 'logs'}
+[0m20:48:11.195468 [info ] [MainThread]: Creating dbt configuration folder at C:\Users\Maria\.dbt
+[0m20:48:11.198033 [debug] [MainThread]: Starter project path: C:\Users\Maria\Desktop\TCC_UNIFOR\.venv\Lib\site-packages\dbt\include\starter_project
+[0m20:48:11.238176 [info ] [MainThread]: Setting up your profile.
+[0m20:48:20.024392 [info ] [MainThread]: Profile mercado_pago written to C:\Users\Maria\.dbt\profiles.yml using target's sample configuration. Once updated, you'll be able to start developing with dbt.
+[0m20:48:20.027193 [info ] [MainThread]: Running dbt debug to validate the project...
+[0m20:48:20.027987 [info ] [MainThread]: dbt version: 1.12.4
+[0m20:48:20.028465 [info ] [MainThread]: python version: 3.13.0
+[0m20:48:20.028909 [info ] [MainThread]: python path: C:\Users\Maria\Desktop\TCC_UNIFOR\.venv\Scripts\python.exe
+[0m20:48:20.029471 [info ] [MainThread]: os info: Windows-11-10.0.26200-SP0
+[0m20:48:20.114017 [info ] [MainThread]: Using profiles dir at C:\Users\Maria\.dbt
+[0m20:48:20.114722 [info ] [MainThread]: Using profiles.yml file at C:\Users\Maria\.dbt\profiles.yml
+[0m20:48:20.115254 [info ] [MainThread]: Using dbt_project.yml file at C:\Users\Maria\Desktop\TCC_UNIFOR\dbt\mercado_pago\dbt_project.yml
+[0m20:48:20.117847 [info ] [MainThread]: adapter type: duckdb
+[0m20:48:20.118461 [info ] [MainThread]: adapter version: 1.11.0
+[0m20:48:20.239403 [info ] [MainThread]: Configuration:
+[0m20:48:20.240200 [info ] [MainThread]:   profiles.yml file [[32mOK found and valid[0m]
+[0m20:48:20.240821 [info ] [MainThread]:   dbt_project.yml file [[32mOK found and valid[0m]
+[0m20:48:20.241272 [info ] [MainThread]: Required dependencies:
+[0m20:48:20.241867 [debug] [MainThread]: Executing "git --help"
+[0m20:48:20.302579 [debug] [MainThread]: STDOUT: "b"usage: git [-v | --version] [-h | --help] [-C <path>] [-c <name>=<value>]\n           [--exec-path[=<path>]] [--html-path] [--man-path] [--info-path]\n           [-p | --paginate | -P | --no-pager] [--no-replace-objects] [--bare]\n           [--git-dir=<path>] [--work-tree=<path>] [--namespace=<name>]\n           [--config-env=<name>=<envvar>] <command> [<args>]\n\nThese are common Git commands used in various situations:\n\nstart a working area (see also: git help tutorial)\n   clone     Clone a repository into a new directory\n   init      Create an empty Git repository or reinitialize an existing one\n\nwork on the current change (see also: git help everyday)\n   add       Add file contents to the index\n   mv        Move or rename a file, a directory, or a symlink\n   restore   Restore working tree files\n   rm        Remove files from the working tree and from the index\n\nexamine the history and state (see also: git help revisions)\n   bisect    Use binary search to find the commit that introduced a bug\n   diff      Show changes between commits, commit and working tree, etc\n   grep      Print lines matching a pattern\n   log       Show commit logs\n   show      Show various types of objects\n   status    Show the working tree status\n\ngrow, mark and tweak your common history\n   branch    List, create, or delete branches\n   commit    Record changes to the repository\n   merge     Join two or more development histories together\n   rebase    Reapply commits on top of another base tip\n   reset     Reset current HEAD to the specified state\n   switch    Switch branches\n   tag       Create, list, delete or verify a tag object signed with GPG\n\ncollaborate (see also: git help workflows)\n   fetch     Download objects and refs from another repository\n   pull      Fetch from and integrate with another repository or a local branch\n   push      Update remote refs along with associated objects\n\n'git help -a' and 'git help -g' list available subcommands and some\nconcept guides. See 'git help <command>' or 'git help <concept>'\nto read about a specific subcommand or concept.\nSee 'git help git' for an overview of the system.\n""
+[0m20:48:20.303283 [debug] [MainThread]: STDERR: "b''"
+[0m20:48:20.304099 [info ] [MainThread]:  - git [[32mOK found[0m]
+
+[0m20:48:20.304759 [info ] [MainThread]: Connection:
+[0m20:48:20.305248 [info ] [MainThread]:   database: dev
+[0m20:48:20.305698 [info ] [MainThread]:   schema: main
+[0m20:48:20.306103 [info ] [MainThread]:   path: dev.duckdb
+[0m20:48:20.306578 [info ] [MainThread]:   config_options: None
+[0m20:48:20.307067 [info ] [MainThread]:   extensions: None
+[0m20:48:20.307502 [info ] [MainThread]:   settings: {}
+[0m20:48:20.307886 [info ] [MainThread]:   external_root: .
+[0m20:48:20.308351 [info ] [MainThread]:   use_credential_provider: None
+[0m20:48:20.308841 [info ] [MainThread]:   attach: None
+[0m20:48:20.309226 [info ] [MainThread]:   filesystems: None
+[0m20:48:20.309844 [info ] [MainThread]:   remote: None
+[0m20:48:20.310685 [info ] [MainThread]:   plugins: None
+[0m20:48:20.311465 [info ] [MainThread]:   disable_transactions: False
+[0m20:48:20.312627 [info ] [MainThread]: Registered adapter: duckdb=1.11.0
+[0m20:48:20.681266 [debug] [MainThread]: Acquiring new duckdb connection 'debug'
+[0m20:48:24.334507 [debug] [MainThread]: Using duckdb connection "debug"
+[0m20:48:24.335003 [debug] [MainThread]: On debug: select 1 as id
+[0m20:48:24.335417 [debug] [MainThread]: Opening a new connection, currently in state init
+[0m20:48:24.403137 [debug] [MainThread]: SQL status: OK in 0.068 seconds
+[0m20:48:24.405266 [debug] [MainThread]: On debug: Close
+[0m20:48:24.407044 [info ] [MainThread]:   Connection test: [[32mOK connection ok[0m]
+
+[0m20:48:24.408176 [info ] [MainThread]: [32mAll checks passed![0m
+[0m20:48:24.409363 [info ] [MainThread]: Your new dbt project "mercado_pago" was created!
+Initialized new project in C:\Users\Maria\Desktop\TCC_UNIFOR\dbt\mercado_pago\mercado_pago
+
+For more information on how to configure the profiles.yml file,
+please consult the dbt documentation here:
+
+  https://docs.getdbt.com/docs/configure-your-profile
+
+One more thing:
+
+Need help? Don't hesitate to reach out to us via GitHub issues or on Slack:
+
+  https://community.getdbt.com/
+
+Happy modeling!
+
+[0m20:48:24.411440 [debug] [MainThread]: Command `dbt init` succeeded at 20:48:24.411093 after 13.43 seconds
+[0m20:48:24.412057 [debug] [MainThread]: Connection 'debug' was properly closed.
+[0m20:48:24.412727 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'end', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x00000249A24656E0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x00000249A20C29F0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x00000249A249BF00>]}
+[0m20:48:24.413393 [debug] [MainThread]: Flushing usage events
+[0m20:48:25.336046 [debug] [MainThread]: An error was encountered while trying to flush usage events
