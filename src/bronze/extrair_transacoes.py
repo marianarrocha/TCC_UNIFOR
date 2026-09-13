@@ -4,33 +4,35 @@ import uuid
 from pathlib import Path
 
 import requests
-from dotenv import load_dotenv
-
 
 # ============================================================
 # CONFIGURAÇÃO
 # ============================================================
 
-# Diretório raiz do projeto
-RAIZ_PROJETO = Path(__file__).resolve().parents[2]
+# Volume do Unity Catalog
+PASTA_BRONZE = Path(
+    "/Volumes/tcc_unifor/bronze/raw_files/mercado_pago"
+)
 
-# Carrega as variáveis do arquivo .env
-load_dotenv(RAIZ_PROJETO / ".env")
+PASTA_BRONZE.mkdir(
+    parents=True,
+    exist_ok=True
+)
 
 
 # ============================================================
 # CREDENCIAIS
 # ============================================================
 
-MERCADO_PAGO_ACCESS_TOKEN = os.getenv(
-    "MERCADO_PAGO_ACCESS_TOKEN"
+MERCADO_PAGO_ACCESS_TOKEN = dbutils.secrets.get(
+    catalog="tcc_unifor",
+    schema="config",
+    key="mercado_pago_access_token"
 )
 
 if not MERCADO_PAGO_ACCESS_TOKEN:
-
     raise ValueError(
-        "MERCADO_PAGO_ACCESS_TOKEN não foi "
-        "encontrado no arquivo .env"
+        "Variável MERCADO_PAGO_ACCESS_TOKEN não encontrada."
     )
 
 
@@ -38,17 +40,7 @@ if not MERCADO_PAGO_ACCESS_TOKEN:
 # API
 # ============================================================
 
-URL_API = (
-    "https://api.mercadopago.com/v1/orders"
-)
-
-# Diretório onde os dados brutos serão armazenados
-PASTA_BRONZE = (
-    RAIZ_PROJETO
-    / "data"
-    / "bronze"
-    / "mercado_pago"
-)
+URL_API = "https://api.mercadopago.com/v1/orders"
 
 
 # ============================================================
@@ -70,58 +62,39 @@ VALORES = [
 
 
 # ============================================================
-# CRIAÇÃO DO DIRETÓRIO
-# ============================================================
-
-PASTA_BRONZE.mkdir(
-    parents=True,
-    exist_ok=True
-)
-
-
-# ============================================================
-# CABEÇALHOS DA REQUISIÇÃO
+# CABEÇALHOS
 # ============================================================
 
 headers = {
-    "Authorization": (
-        f"Bearer {MERCADO_PAGO_ACCESS_TOKEN}"
-    ),
+    "Authorization": f"Bearer {MERCADO_PAGO_ACCESS_TOKEN}",
     "Content-Type": "application/json",
 }
 
 
 # ============================================================
-# INÍCIO DA INGESTÃO
+# INÍCIO
 # ============================================================
 
 print("=" * 70)
 print("INGESTÃO DE TRANSAÇÕES — MERCADO PAGO")
 print("=" * 70)
 
-print("\nEndpoint:")
-print(f"  POST {URL_API}")
+print(f"\nEndpoint: POST {URL_API}")
+print(f"\nDestino Bronze: {PASTA_BRONZE}")
+print(f"\nQuantidade de transações: {len(VALORES)}")
 
-print("\nDestino local:")
-print(f"  {PASTA_BRONZE}")
 
-print("\nQuantidade de transações:")
-print(f"  {len(VALORES)}")
+sucessos = 0
+erros = 0
 
 
 # ============================================================
 # PROCESSAMENTO
 # ============================================================
 
-sucessos = 0
-erros = 0
-
-
 for indice, valor in enumerate(VALORES, start=1):
 
-    nome_arquivo = (
-        f"order_{indice:03d}.json"
-    )
+    nome_arquivo = f"order_{indice:03d}.json"
 
     caminho_arquivo = (
         PASTA_BRONZE
@@ -131,10 +104,6 @@ for indice, valor in enumerate(VALORES, start=1):
     external_reference = (
         f"TCC-TESTE-{indice:03d}"
     )
-
-    # --------------------------------------------------------
-    # Payload utilizado pela Orders API
-    # --------------------------------------------------------
 
     payload = {
         "type": "online",
@@ -157,21 +126,11 @@ for indice, valor in enumerate(VALORES, start=1):
         }
     }
 
-    # --------------------------------------------------------
-    # Idempotência
-    # --------------------------------------------------------
-
-    idempotency_key = str(
-        uuid.uuid4()
-    )
+    idempotency_key = str(uuid.uuid4())
 
     headers["X-Idempotency-Key"] = (
         idempotency_key
     )
-
-    # --------------------------------------------------------
-    # Requisição
-    # --------------------------------------------------------
 
     print("\n" + "-" * 70)
 
@@ -196,17 +155,9 @@ for indice, valor in enumerate(VALORES, start=1):
             timeout=30
         )
 
-        # ----------------------------------------------------
-        # Verificação da resposta HTTP
-        # ----------------------------------------------------
-
         if response.ok:
 
             dados = response.json()
-
-            # ------------------------------------------------
-            # Salvamento da resposta bruta
-            # ------------------------------------------------
 
             with open(
                 caminho_arquivo,
@@ -223,48 +174,22 @@ for indice, valor in enumerate(VALORES, start=1):
 
             sucessos += 1
 
-            print(
-                f"✓ Requisição realizada com sucesso"
-            )
-
-            print(
-                f"  HTTP: {response.status_code}"
-            )
-
-            print(
-                f"  Order ID: "
-                f"{dados.get('id')}"
-            )
-
-            print(
-                f"  Status: "
-                f"{dados.get('status')}"
-            )
-
-            print(
-                f"  Arquivo: "
-                f"{nome_arquivo}"
-            )
+            print("✓ Requisição realizada com sucesso")
+            print(f"  HTTP: {response.status_code}")
+            print(f"  Order ID: {dados.get('id')}")
+            print(f"  Status: {dados.get('status')}")
+            print(f"  Arquivo: {nome_arquivo}")
 
         else:
 
             erros += 1
 
-            print(
-                "✗ Erro retornado pela API"
-            )
-
-            print(
-                f"  HTTP: {response.status_code}"
-            )
+            print("✗ Erro retornado pela API")
+            print(f"  HTTP: {response.status_code}")
 
             try:
 
                 erro_api = response.json()
-
-                print(
-                    "  Resposta:"
-                )
 
                 print(
                     json.dumps(
@@ -276,50 +201,31 @@ for indice, valor in enumerate(VALORES, start=1):
 
             except ValueError:
 
-                print(
-                    "  Resposta:"
-                )
-
-                print(
-                    response.text
-                )
+                print(response.text)
 
     except requests.exceptions.Timeout:
 
         erros += 1
 
-        print(
-            "✗ Timeout na requisição."
-        )
+        print("✗ Timeout na requisição.")
 
     except requests.exceptions.RequestException as erro:
 
         erros += 1
 
-        print(
-            "✗ Erro de comunicação com a API."
-        )
-
-        print(
-            f"  {erro}"
-        )
+        print("✗ Erro de comunicação com a API.")
+        print(f"  {erro}")
 
     except ValueError as erro:
 
         erros += 1
 
-        print(
-            "✗ A API retornou uma resposta "
-            "que não pôde ser interpretada como JSON."
-        )
-
-        print(
-            f"  {erro}"
-        )
+        print("✗ Resposta inválida da API.")
+        print(f"  {erro}")
 
 
 # ============================================================
-# RESUMO DA INGESTÃO
+# RESUMO
 # ============================================================
 
 print("\n" + "=" * 70)
@@ -335,21 +241,13 @@ print(
 )
 
 print(
-    f"Transações com erro:    {erros}"
+    f"Transações com erro: {erros}"
 )
 
 print(
-    f"\nDiretório Bronze:"
+    f"\nDiretório Bronze: {PASTA_BRONZE}"
 )
 
-print(
-    f"  {PASTA_BRONZE}"
-)
-
-
-# ============================================================
-# RESULTADO FINAL
-# ============================================================
 
 if erros == 0:
 
@@ -357,20 +255,10 @@ if erros == 0:
         "\n✓ INGESTÃO CONCLUÍDA COM SUCESSO."
     )
 
-    print(
-        "✓ Todas as respostas da API foram "
-        "armazenadas como JSON bruto."
-    )
-
 else:
 
     print(
         "\n⚠ INGESTÃO CONCLUÍDA COM ERROS."
-    )
-
-    print(
-        "⚠ Verifique as requisições que "
-        "apresentaram falha."
     )
 
 print("\n" + "=" * 70)
