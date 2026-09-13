@@ -1,9 +1,9 @@
 import json
-import os
 import uuid
 from pathlib import Path
 
 import requests
+
 
 # ============================================================
 # CONFIGURAÇÃO
@@ -86,6 +86,7 @@ print(f"\nQuantidade de transações: {len(VALORES)}")
 
 sucessos = 0
 erros = 0
+arquivos_criados = []
 
 
 # ============================================================
@@ -93,13 +94,6 @@ erros = 0
 # ============================================================
 
 for indice, valor in enumerate(VALORES, start=1):
-
-    nome_arquivo = f"order_{indice:03d}.json"
-
-    caminho_arquivo = (
-        PASTA_BRONZE
-        / nome_arquivo
-    )
 
     external_reference = (
         f"TCC-TESTE-{indice:03d}"
@@ -126,6 +120,10 @@ for indice, valor in enumerate(VALORES, start=1):
         }
     }
 
+    # ========================================================
+    # IDEMPOTÊNCIA
+    # ========================================================
+
     idempotency_key = str(uuid.uuid4())
 
     headers["X-Idempotency-Key"] = (
@@ -148,6 +146,10 @@ for indice, valor in enumerate(VALORES, start=1):
 
     try:
 
+        # ====================================================
+        # REQUISIÇÃO À API
+        # ====================================================
+
         response = requests.post(
             URL_API,
             headers=headers,
@@ -155,9 +157,67 @@ for indice, valor in enumerate(VALORES, start=1):
             timeout=30
         )
 
+        # ====================================================
+        # SUCESSO
+        # ====================================================
+
         if response.ok:
 
             dados = response.json()
+
+            order_id = dados.get("id")
+
+            # ------------------------------------------------
+            # VALIDAÇÃO DO ID RETORNADO
+            # ------------------------------------------------
+
+            if not order_id:
+
+                erros += 1
+
+                print(
+                    "✗ A API respondeu com sucesso, "
+                    "mas não retornou o Order ID."
+                )
+
+                continue
+
+            # ------------------------------------------------
+            # NOME ÚNICO DO ARQUIVO
+            # ------------------------------------------------
+
+            nome_arquivo = (
+                f"order_{order_id}.json"
+            )
+
+            caminho_arquivo = (
+                PASTA_BRONZE
+                / nome_arquivo
+            )
+
+            # ------------------------------------------------
+            # PROTEÇÃO CONTRA SOBRESCRITA
+            # ------------------------------------------------
+
+            if caminho_arquivo.exists():
+
+                print(
+                    "⚠ Arquivo já existe."
+                )
+
+                print(
+                    f"  Arquivo: {nome_arquivo}"
+                )
+
+                print(
+                    "  Registro não será sobrescrito."
+                )
+
+                continue
+
+            # ------------------------------------------------
+            # GRAVAÇÃO DO JSON BRUTO
+            # ------------------------------------------------
 
             with open(
                 caminho_arquivo,
@@ -174,18 +234,45 @@ for indice, valor in enumerate(VALORES, start=1):
 
             sucessos += 1
 
-            print("✓ Requisição realizada com sucesso")
-            print(f"  HTTP: {response.status_code}")
-            print(f"  Order ID: {dados.get('id')}")
-            print(f"  Status: {dados.get('status')}")
-            print(f"  Arquivo: {nome_arquivo}")
+            arquivos_criados.append(
+                nome_arquivo
+            )
+
+            print(
+                "✓ Requisição realizada com sucesso"
+            )
+
+            print(
+                f"  HTTP: {response.status_code}"
+            )
+
+            print(
+                f"  Order ID: {order_id}"
+            )
+
+            print(
+                f"  Status: {dados.get('status')}"
+            )
+
+            print(
+                f"  Arquivo: {nome_arquivo}"
+            )
+
+        # ====================================================
+        # ERRO DA API
+        # ====================================================
 
         else:
 
             erros += 1
 
-            print("✗ Erro retornado pela API")
-            print(f"  HTTP: {response.status_code}")
+            print(
+                "✗ Erro retornado pela API"
+            )
+
+            print(
+                f"  HTTP: {response.status_code}"
+            )
 
             try:
 
@@ -201,27 +288,53 @@ for indice, valor in enumerate(VALORES, start=1):
 
             except ValueError:
 
-                print(response.text)
+                print(
+                    response.text
+                )
+
+    # ========================================================
+    # TIMEOUT
+    # ========================================================
 
     except requests.exceptions.Timeout:
 
         erros += 1
 
-        print("✗ Timeout na requisição.")
+        print(
+            "✗ Timeout na requisição."
+        )
+
+    # ========================================================
+    # ERRO DE COMUNICAÇÃO
+    # ========================================================
 
     except requests.exceptions.RequestException as erro:
 
         erros += 1
 
-        print("✗ Erro de comunicação com a API.")
-        print(f"  {erro}")
+        print(
+            "✗ Erro de comunicação com a API."
+        )
+
+        print(
+            f"  {erro}"
+        )
+
+    # ========================================================
+    # ERRO AO INTERPRETAR RESPOSTA
+    # ========================================================
 
     except ValueError as erro:
 
         erros += 1
 
-        print("✗ Resposta inválida da API.")
-        print(f"  {erro}")
+        print(
+            "✗ Resposta inválida da API."
+        )
+
+        print(
+            f"  {erro}"
+        )
 
 
 # ============================================================
@@ -245,9 +358,32 @@ print(
 )
 
 print(
+    f"\nNovos arquivos criados: {len(arquivos_criados)}"
+)
+
+print(
     f"\nDiretório Bronze: {PASTA_BRONZE}"
 )
 
+
+# ============================================================
+# ARQUIVOS CRIADOS
+# ============================================================
+
+if arquivos_criados:
+
+    print("\nArquivos armazenados:")
+
+    for arquivo in arquivos_criados:
+
+        print(
+            f"  ✓ {arquivo}"
+        )
+
+
+# ============================================================
+# CONCLUSÃO
+# ============================================================
 
 if erros == 0:
 
