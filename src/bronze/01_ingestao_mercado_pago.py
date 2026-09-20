@@ -1,7 +1,6 @@
 import json
 import uuid
 from pathlib import Path
-
 import requests
 
 
@@ -44,20 +43,20 @@ URL_API = "https://api.mercadopago.com/v1/orders"
 
 
 # ============================================================
-# VALORES DOS PEDIDOS DE TESTE
+# NOVA LEVA DE VALORES PARA TESTE
 # ============================================================
 
 VALORES = [
-    25.90,
-    50.00,
-    75.50,
-    100.00,
-    120.90,
-    150.00,
-    200.00,
-    250.75,
-    350.00,
-    500.00,
+    35.50,
+    80.00,
+    135.75,
+    175.00,
+    225.90,
+    275.00,
+    325.50,
+    400.00,
+    450.75,
+    600.00,
 ]
 
 
@@ -81,7 +80,7 @@ print("=" * 70)
 
 print(f"\nEndpoint: POST {URL_API}")
 print(f"\nDestino Bronze: {PASTA_BRONZE}")
-print(f"\nQuantidade de transações: {len(VALORES)}")
+print(f"\nQuantidade de novas transações: {len(VALORES)}")
 
 
 sucessos = 0
@@ -95,8 +94,12 @@ arquivos_criados = []
 
 for indice, valor in enumerate(VALORES, start=1):
 
+    # --------------------------------------------------------
+    # NOVA REFERÊNCIA PARA A SEGUNDA LEVA
+    # --------------------------------------------------------
+
     external_reference = (
-        f"TCC-TESTE-{indice:03d}"
+        f"TCC-TESTE-2-{indice:03d}"
     )
 
     payload = {
