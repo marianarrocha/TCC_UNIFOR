@@ -1,0 +1,53 @@
+resources:
+  jobs:
+    TCC_UNIFOR_MERCADO_PAGO_PIPELINE:
+      name: TCC_UNIFOR_MERCADO_PAGO_PIPELINE
+
+      schedule:
+        quartz_cron_expression: 58 0 4 * * ?
+        timezone_id: America/Fortaleza
+        pause_status: UNPAUSED
+
+      tasks:
+        - task_key: 01_ingestao_mercado_pago
+          spark_python_task:
+            python_file: ../src/bronze/01_ingestao_mercado_pago.py
+          environment_key: Default
+
+        - task_key: 02_bronze_mercado_pago
+          depends_on:
+            - task_key: 01_ingestao_mercado_pago
+          spark_python_task:
+            python_file: ../src/bronze/02_bronze_mercado_pago.py
+          environment_key: Default
+
+        - task_key: 03_silver_mercado_pago
+          depends_on:
+            - task_key: 02_bronze_mercado_pago
+          spark_python_task:
+            python_file: ../src/silver/03_silver_mercado_pago.py
+          environment_key: Default
+
+        - task_key: 04_qualidade_silver
+          depends_on:
+            - task_key: 03_silver_mercado_pago
+          spark_python_task:
+            python_file: ../src/silver/04_qualidade_silver.py
+          environment_key: Default
+
+        - task_key: 05_gold_mercado_pago
+          depends_on:
+            - task_key: 04_qualidade_silver
+          spark_python_task:
+            python_file: ../src/gold/05_gold_mercado_pago.py
+          environment_key: Default
+
+      queue:
+        enabled: true
+
+      environments:
+        - environment_key: Default
+          spec:
+            environment_version: "6"
+
+      performance_target: PERFORMANCE_OPTIMIZED
