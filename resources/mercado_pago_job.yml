@@ -42,6 +42,12 @@ resources:
             python_file: ../src/gold/05_gold_mercado_pago.py
           environment_key: Default
 
+        - task_key: 06_atualizar_dashboard
+          depends_on:
+            - task_key: 05_gold_mercado_pago
+          dashboard_task:
+            dashboard_id: 01f1b5260dc617288b6dd62d40326fcb
+
       queue:
         enabled: true
 

@@ -1,27 +1,21 @@
 from pyspark.sql import functions as F
 
 
-# ============================================================
 # CONFIGURAÇÕES
-# ============================================================
 
 TABELA_BRONZE = "tcc_unifor.bronze.mercado_pago_orders"
 
 TABELA_SILVER = "tcc_unifor.silver.mercado_pago_payments"
 
 
-# ============================================================
 # INÍCIO
-# ============================================================
 
 print("=" * 70)
 print("CAMADA SILVER — MERCADO PAGO")
 print("=" * 70)
 
 
-# ============================================================
 # 1. LEITURA DA BRONZE
-# ============================================================
 
 print("\nLendo tabela Bronze...")
 
@@ -40,9 +34,7 @@ if quantidade_bronze == 0:
     )
 
 
-# ============================================================
 # 2. EXPLOSÃO DOS PAGAMENTOS
-# ============================================================
 
 print("\n" + "=" * 70)
 print("EXPLODE DOS PAGAMENTOS")
@@ -64,9 +56,7 @@ print(
 )
 
 
-# ============================================================
 # 3. SELEÇÃO E TRANSFORMAÇÃO DOS CAMPOS
-# ============================================================
 
 print("\n" + "=" * 70)
 print("TRANSFORMAÇÃO DOS CAMPOS")
@@ -76,10 +66,6 @@ df_silver_teste = (
     df_silver_teste
     .select(
 
-        # ----------------------------------------------------
-        # Identificação do pedido
-        # ----------------------------------------------------
-
         F.col("id")
         .alias("order_id"),
 
@@ -88,19 +74,11 @@ df_silver_teste = (
         F.col("type")
         .alias("order_type"),
 
-        # ----------------------------------------------------
-        # Status do pedido
-        # ----------------------------------------------------
-
         F.col("status")
         .alias("order_status"),
 
         F.col("status_detail")
         .alias("order_status_detail"),
-
-        # ----------------------------------------------------
-        # Dados financeiros do pedido
-        # ----------------------------------------------------
 
         F.col("currency"),
 
@@ -112,34 +90,18 @@ df_silver_teste = (
         .cast("decimal(18,2)")
         .alias("total_paid_amount"),
 
-        # ----------------------------------------------------
-        # Datas do pedido
-        # ----------------------------------------------------
-
         F.to_timestamp("created_date")
         .alias("created_date"),
 
         F.to_timestamp("last_updated_date")
         .alias("last_updated_date"),
 
-        # ----------------------------------------------------
-        # Identificação do pagamento
-        # ----------------------------------------------------
-
         F.col("payment.id")
         .alias("payment_id"),
-
-        # ----------------------------------------------------
-        # Dados financeiros do pagamento
-        # ----------------------------------------------------
 
         F.col("payment.amount")
         .cast("decimal(18,2)")
         .alias("payment_amount"),
-
-        # ----------------------------------------------------
-        # Status do pagamento
-        # ----------------------------------------------------
 
         F.col("payment.status")
         .alias("payment_status"),
@@ -147,16 +109,8 @@ df_silver_teste = (
         F.col("payment.status_detail")
         .alias("payment_status_detail"),
 
-        # ----------------------------------------------------
-        # Referência do pagamento
-        # ----------------------------------------------------
-
         F.col("payment.reference_id")
         .alias("payment_reference_id"),
-
-        # ----------------------------------------------------
-        # Método de pagamento
-        # ----------------------------------------------------
 
         F.col("payment.payment_method.id")
         .alias("payment_method_id"),
@@ -164,25 +118,15 @@ df_silver_teste = (
         F.col("payment.payment_method.type")
         .alias("payment_method_type"),
 
-        # ----------------------------------------------------
-        # Expiração
-        # ----------------------------------------------------
-
         F.col("payment.date_of_expiration")
         .alias("payment_expiration"),
-
-        # ----------------------------------------------------
-        # Controle de ingestão
-        # ----------------------------------------------------
 
         F.col("_ingestion_timestamp")
     )
 )
 
 
-# ============================================================
 # 4. SCHEMA RESULTANTE
-# ============================================================
 
 print("\n" + "=" * 70)
 print("SCHEMA DA SILVER")
@@ -190,10 +134,7 @@ print("=" * 70)
 
 df_silver_teste.printSchema()
 
-
-# ============================================================
 # 5. VALIDAÇÃO DOS REGISTROS
-# ============================================================
 
 print("\n" + "=" * 70)
 print("VALIDAÇÃO DOS REGISTROS")
@@ -210,9 +151,7 @@ print(
 )
 
 
-# ============================================================
 # 6. VALIDAÇÃO DE IDS
-# ============================================================
 
 print("\n" + "=" * 70)
 print("VALIDAÇÃO DOS IDENTIFICADORES")
@@ -241,9 +180,7 @@ print(
 )
 
 
-# ============================================================
 # 7. VISUALIZAÇÃO DOS DADOS
-# ============================================================
 
 print("\n" + "=" * 70)
 print("AMOSTRA DOS DADOS SILVER")
@@ -270,9 +207,7 @@ print("=" * 70)
 )
 
 
-# ============================================================
 # 8. RESUMO FINANCEIRO
-# ============================================================
 
 print("\n" + "=" * 70)
 print("RESUMO FINANCEIRO")
@@ -302,9 +237,7 @@ print("=" * 70)
 )
 
 
-# ============================================================
 # 9. DISTRIBUIÇÃO DOS MÉTODOS DE PAGAMENTO
-# ============================================================
 
 print("\n" + "=" * 70)
 print("MÉTODOS DE PAGAMENTO")
@@ -323,9 +256,8 @@ print("=" * 70)
     )
 )
 
-# ============================================================
+
 # 10. VALIDAÇÃO DE DUPLICIDADE DOS PAGAMENTOS
-# ============================================================
 
 print("\n" + "=" * 70)
 print("VALIDAÇÃO DE DUPLICIDADE")
@@ -372,9 +304,7 @@ print(
     "\n✓ Nenhuma duplicidade encontrada."
 )
 
-# ============================================================
 # 11. GRAVAÇÃO DA SILVER
-# ============================================================
 
 print("\n" + "=" * 70)
 print("GRAVAÇÃO DA TABELA SILVER")
@@ -393,9 +323,7 @@ print(
     f"{TABELA_SILVER}"
 )
 
-# ============================================================
 # 12. VALIDAÇÃO DA TABELA SILVER
-# ============================================================
 
 print("\n" + "=" * 70)
 print("VALIDAÇÃO FINAL DA SILVER")

@@ -1,22 +1,15 @@
-# ============================================================
-# 05_gold_mercado_pago.py
-# Camada Gold - Mercado Pago
-# ============================================================
+# Camada Gold
 
 from pyspark.sql import functions as F
 
 
-# ============================================================
 # 1. CONFIGURAÇÕES
-# ============================================================
 
 TABELA_SILVER = "tcc_unifor.silver.mercado_pago_payments"
 TABELA_GOLD = "tcc_unifor.gold.mercado_pago_resumo"
 
 
-# ============================================================
 # 2. LEITURA DA SILVER
-# ============================================================
 
 print("=" * 70)
 print("INICIANDO CAMADA GOLD - MERCADO PAGO")
@@ -34,9 +27,7 @@ if quantidade_silver == 0:
     raise ValueError("A tabela Silver está vazia. Gold não pode ser criada.")
 
 
-# ============================================================
 # 3. PREPARAÇÃO DOS DADOS
-# ============================================================
 
 print("\nPreparando dados para agregação...")
 
@@ -53,9 +44,7 @@ df_base = (
 )
 
 
-# ============================================================
 # 4. AGREGAÇÃO GOLD
-# ============================================================
 
 print("Calculando indicadores analíticos...")
 
@@ -96,14 +85,10 @@ df_gold = (
 )
 
 
-# ============================================================
 # 5. INDICADORES PERCENTUAIS
-# ============================================================
 
 print("Calculando participação percentual...")
 
-
-# Total de pagamentos por data
 window_data = (
     __import__("pyspark.sql.window", fromlist=["Window"])
     .Window
@@ -131,9 +116,7 @@ df_gold = (
 )
 
 
-# ============================================================
 # 6. ORDENAÇÃO
-# ============================================================
 
 df_gold = df_gold.orderBy(
     "data_referencia",
@@ -142,9 +125,7 @@ df_gold = df_gold.orderBy(
 )
 
 
-# ============================================================
 # 7. VALIDAÇÕES
-# ============================================================
 
 print("\n" + "=" * 70)
 print("VALIDAÇÕES DA GOLD")
@@ -158,7 +139,6 @@ if quantidade_gold == 0:
     raise ValueError("A tabela Gold ficou vazia após as agregações.")
 
 
-# Verificação de valores nulos nos principais indicadores
 colunas_indicadores = [
     "quantidade_pagamentos",
     "valor_total",
@@ -185,7 +165,6 @@ for coluna in colunas_indicadores:
         )
 
 
-# Verificação de valores positivos
 valores_invalidos = (
     df_gold
     .filter(
@@ -204,7 +183,6 @@ if valores_invalidos > 0:
     )
 
 
-# Verificação do percentual
 percentuais_invalidos = (
     df_gold
     .filter(
@@ -224,10 +202,8 @@ if percentuais_invalidos > 0:
         "Foram encontrados percentuais inválidos na Gold."
     )
 
-
-# ============================================================
 # 8. RESUMO DOS INDICADORES
-# ============================================================
+
 
 print("\n" + "=" * 70)
 print("RESUMO DOS INDICADORES GOLD")
@@ -255,9 +231,7 @@ df_gold.select(
 ).show(truncate=False)
 
 
-# ============================================================
 # 9. DISTRIBUIÇÃO POR STATUS
-# ============================================================
 
 print("\nDistribuição por status:")
 
@@ -275,9 +249,7 @@ df_gold.groupBy(
 ).show(truncate=False)
 
 
-# ============================================================
 # 10. DISTRIBUIÇÃO POR MÉTODO DE PAGAMENTO
-# ============================================================
 
 print("\nDistribuição por método de pagamento:")
 
@@ -295,10 +267,7 @@ df_gold.groupBy(
     F.desc("quantidade_pagamentos")
 ).show(truncate=False)
 
-
-# ============================================================
 # 11. AMOSTRA DA GOLD
-# ============================================================
 
 print("\nAmostra da tabela Gold:")
 
@@ -308,9 +277,7 @@ df_gold.show(
 )
 
 
-# ============================================================
 # 12. CRIAÇÃO DO SCHEMA GOLD
-# ============================================================
 
 print("\nCriando schema Gold, caso não exista...")
 
@@ -319,9 +286,7 @@ spark.sql("""
 """)
 
 
-# ============================================================
 # 13. GRAVAÇÃO DA TABELA GOLD
-# ============================================================
 
 print(f"\nGravando tabela: {TABELA_GOLD}")
 
@@ -335,9 +300,7 @@ print(f"\nGravando tabela: {TABELA_GOLD}")
 )
 
 
-# ============================================================
 # 14. VALIDAÇÃO FINAL
-# ============================================================
 
 print("\nValidando tabela Gold criada...")
 

@@ -1,32 +1,12 @@
-# ============================================================
-# 02_bronze_mercado_pago.py
-# ============================================================
-# Bronze incremental - Mercado Pago
-#
-# Objetivos:
-# 1. Ler os JSONs brutos
-# 2. Normalizar o schema
-# 3. Identificar somente registros novos
-# 4. Ajustar o schema dos novos registros ao schema existente
-# 5. Inserir incrementalmente na Bronze
-# 6. Validar a carga
-# ============================================================
-
 from pyspark.sql import functions as F
 
-
-# ============================================================
 # CONFIGURAÇÕES
-# ============================================================
 
 CAMINHO_RAW = "/Volumes/tcc_unifor/bronze/raw_files/mercado_pago"
 
 TABELA_BRONZE = "tcc_unifor.bronze.mercado_pago_orders"
 
-
-# ============================================================
 # INÍCIO
-# ============================================================
 
 print("=" * 70)
 print("BRONZE - MERCADO PAGO")
@@ -36,9 +16,7 @@ print(f"\nLendo arquivos JSON de:")
 print(CAMINHO_RAW)
 
 
-# ============================================================
 # 1. LEITURA DOS JSONs
-# ============================================================
 
 df_raw = (
     spark.read
@@ -59,21 +37,7 @@ if quantidade_raw == 0:
     )
 
 
-# ============================================================
 # 2. NORMALIZAÇÃO DO SCHEMA
-# ============================================================
-#
-# Mantemos somente os campos definidos originalmente
-# na Bronze.
-#
-# Campos específicos dos cartões, como:
-# - token
-# - installments
-# - installment_amount
-# - transaction_security
-#
-# não entram na Bronze.
-# ============================================================
 
 df_normalizado = df_raw.select(
 
@@ -208,10 +172,7 @@ print("\nSchema após normalização:")
 
 df_normalizado.printSchema()
 
-
-# ============================================================
 # 3. VALIDAÇÃO DOS IDs
-# ============================================================
 
 ids_nulos = (
     df_normalizado
@@ -237,9 +198,7 @@ print(
 )
 
 
-# ============================================================
 # 4. VERIFICAR SE A TABELA EXISTE
-# ============================================================
 
 tabela_existe = spark.catalog.tableExists(
     TABELA_BRONZE
@@ -250,9 +209,7 @@ print(
 )
 
 
-# ============================================================
 # 5. PRIMEIRA CARGA
-# ============================================================
 
 if not tabela_existe:
 
@@ -277,9 +234,7 @@ if not tabela_existe:
     )
 
 
-# ============================================================
 # 6. CARGA INCREMENTAL
-# ============================================================
 
 else:
 
@@ -292,9 +247,7 @@ else:
     )
 
 
-    # ========================================================
-    # 6.1 LER TABELA E SCHEMA
-    # ========================================================
+    # LER TABELA E SCHEMA
 
     df_bronze = spark.table(
         TABELA_BRONZE
@@ -303,9 +256,7 @@ else:
     schema_tabela = df_bronze.schema
 
 
-    # ========================================================
-    # 6.2 IDENTIFICAR IDS EXISTENTES
-    # ========================================================
+    # IDENTIFICAR IDS EXISTENTES
 
     ids_existentes = (
         df_bronze
@@ -326,9 +277,7 @@ else:
     )
 
 
-    # ========================================================
-    # 6.3 IDENTIFICAR NOVOS REGISTROS
-    # ========================================================
+    # IDENTIFICAR NOVOS REGISTROS
 
     df_novos = (
         df_normalizado
@@ -357,9 +306,7 @@ else:
     )
 
 
-    # ========================================================
-    # 6.4 NENHUM REGISTRO NOVO
-    # ========================================================
+    # NENHUM REGISTRO NOVO
 
     if quantidade_novos == 0:
 
@@ -369,28 +316,7 @@ else:
 
     else:
 
-        # ====================================================
-        # 6.5 AJUSTAR SCHEMA
-        # ====================================================
-        #
-        # Aqui está a correção principal.
-        #
-        # Criamos um DataFrame vazio usando EXATAMENTE
-        # o schema da tabela existente.
-        #
-        # Depois fazemos unionByName com os novos dados.
-        #
-        # O Spark passa a utilizar a estrutura do schema
-        # existente também para os StructTypes internos.
-        #
-        # Isso resolve diferenças de nullable como:
-        #
-        # tabela:
-        # payment_method nullable = true
-        #
-        # novos:
-        # payment_method nullable = false
-        # ====================================================
+        # AJUSTAR SCHEMA
 
         print(
             "\nAplicando o schema existente "
@@ -412,16 +338,7 @@ else:
             )
         )
 
-
-        # ====================================================
-        # 6.6 REMOVER O DATAFRAME VAZIO
-        # ====================================================
-        #
-        # O union acima serve somente para harmonizar
-        # o schema. Como o primeiro DataFrame está vazio,
-        # todos os registros presentes continuam sendo
-        # exclusivamente os 10 novos registros.
-        # ====================================================
+        # REMOVER O DATAFRAME VAZIO
 
         df_novos = df_novos_schema
 
@@ -433,9 +350,7 @@ else:
         df_novos.printSchema()
 
 
-        # ====================================================
-        # 6.7 VALIDAR QUANTIDADE
-        # ====================================================
+        # VALIDAR QUANTIDADE
 
         quantidade_novos_schema = (
             df_novos.count()
@@ -455,9 +370,7 @@ else:
             )
 
 
-        # ====================================================
-        # 6.8 VERIFICAR CAMPOS
-        # ====================================================
+        # VERIFICAR CAMPOS
 
         campos_tabela = [
             campo.name
@@ -499,9 +412,7 @@ else:
         )
 
 
-        # ====================================================
-        # 6.9 GRAVAÇÃO INCREMENTAL
-        # ====================================================
+        # GRAVAÇÃO INCREMENTAL
 
         print(
             "\nInserindo novos registros na Bronze..."
@@ -522,9 +433,7 @@ else:
         )
 
 
-# ============================================================
 # 7. VALIDAÇÃO FINAL
-# ============================================================
 
 print(
     "\n" + "=" * 70
@@ -567,9 +476,7 @@ print(
 )
 
 
-# ============================================================
 # 8. VALIDAR IDS NULOS
-# ============================================================
 
 ids_nulos_final = (
     df_bronze_final
@@ -592,9 +499,7 @@ if ids_nulos_final > 0:
     )
 
 
-# ============================================================
 # 9. DISTRIBUIÇÃO DOS MÉTODOS DE PAGAMENTO
-# ============================================================
 
 print(
     "\nDistribuição dos métodos de pagamento:"
@@ -627,9 +532,7 @@ print(
 )
 
 
-# ============================================================
 # 10. DISTRIBUIÇÃO DOS STATUS
-# ============================================================
 
 print(
     "\nDistribuição dos status das ordens:"
@@ -655,9 +558,7 @@ print(
 )
 
 
-# ============================================================
 # 11. RESUMO FINANCEIRO
-# ============================================================
 
 print(
     "\nResumo financeiro:"
@@ -702,9 +603,7 @@ print(
 )
 
 
-# ============================================================
 # 12. AMOSTRA FINAL
-# ============================================================
 
 print(
     "\nAmostra dos registros mais recentes:"
@@ -736,9 +635,7 @@ print(
 )
 
 
-# ============================================================
 # FINAL
-# ============================================================
 
 print(
     "\n" + "=" * 70

@@ -5,10 +5,7 @@ from pathlib import Path
 
 import requests
 
-
-# ============================================================
 # CONFIGURAÇÕES
-# ============================================================
 
 VOLUME_RAW = "/Volumes/tcc_unifor/bronze/raw_files/mercado_pago"
 
@@ -21,9 +18,7 @@ URL_API = "https://api.mercadopago.com/v1/orders"
 URL_CARD_TOKEN = "https://api.mercadopago.com/v1/card_tokens"
 
 
-# ============================================================
 # ACCESS TOKEN
-# ============================================================
 
 MERCADO_PAGO_ACCESS_TOKEN = dbutils.secrets.get(
     catalog="tcc_unifor",
@@ -31,20 +26,12 @@ MERCADO_PAGO_ACCESS_TOKEN = dbutils.secrets.get(
     key="mercado_pago_access_token"
 )
 
-
-# ============================================================
-# HEADERS
-# ============================================================
-
 HEADERS = {
     "Authorization": f"Bearer {MERCADO_PAGO_ACCESS_TOKEN}",
     "Content-Type": "application/json"
 }
 
-
-# ============================================================
-# CARTÕES DE TESTE
-# ============================================================
+# Adicionar pagamento em cartão
 
 CARTOES_TESTE = {
     "mastercard": {
@@ -66,16 +53,10 @@ CARTOES_TESTE = {
     }
 }
 
-
-# ============================================================
-# FUNÇÕES AUXILIARES
-# ============================================================
+# Gerar valores aleatórios para transações e gerar token de cartão mercado pago visa e master
 
 def gerar_valor_aleatorio():
-    """
-    Gera um valor monetário aleatório entre
-    VALOR_MINIMO e VALOR_MAXIMO.
-    """
+    
     return round(
         random.uniform(
             VALOR_MINIMO,
@@ -86,9 +67,6 @@ def gerar_valor_aleatorio():
 
 
 def gerar_card_token(cartao):
-    """
-    Gera um token de cartão de teste no Mercado Pago.
-    """
 
     payload = {
         "card_number": cartao["numero"],
@@ -174,19 +152,9 @@ def criar_order_cartao(
     external_reference,
     cartao
 ):
-    """
-    Cria uma order utilizando cartão de crédito.
-    """
-
-    # --------------------------------------------------------
-    # 1. Gera o token do cartão
-    # --------------------------------------------------------
 
     card_token = gerar_card_token(cartao)
 
-    # --------------------------------------------------------
-    # 2. Monta a order
-    # --------------------------------------------------------
 
     payload = {
         "type": "online",
@@ -227,9 +195,7 @@ def criar_order_cartao(
     return response
 
 
-# ============================================================
-# PREPARAÇÃO DO DIRETÓRIO
-# ============================================================
+# DIRETÓRIO
 
 Path(VOLUME_RAW).mkdir(
     parents=True,
@@ -237,9 +203,7 @@ Path(VOLUME_RAW).mkdir(
 )
 
 
-# ============================================================
-# EXECUÇÃO DA INGESTÃO
-# ============================================================
+# INGESTÃO
 
 print("=" * 70)
 print("INGESTÃO MERCADO PAGO")
@@ -265,10 +229,7 @@ quantidade_pix = 0
 quantidade_mastercard = 0
 quantidade_visa = 0
 
-
-# ============================================================
 # LOOP PRINCIPAL
-# ============================================================
 
 for i in range(QUANTIDADE_TRANSACOES):
 
@@ -277,17 +238,13 @@ for i in range(QUANTIDADE_TRANSACOES):
     print(f"TRANSAÇÃO {i + 1}/{QUANTIDADE_TRANSACOES}")
     print("-" * 70)
 
-    # --------------------------------------------------------
     # Gera valor aleatório
-    # --------------------------------------------------------
 
     valor = gerar_valor_aleatorio()
 
     valores.append(valor)
 
-    # --------------------------------------------------------
     # Escolhe aleatoriamente o método
-    # --------------------------------------------------------
 
     metodo = random.choice([
         "pix",
@@ -295,9 +252,7 @@ for i in range(QUANTIDADE_TRANSACOES):
         "visa"
     ])
 
-    # --------------------------------------------------------
     # Gera referência externa
-    # --------------------------------------------------------
 
     external_reference = (
         f"TCC-ALEATORIO-"
@@ -308,9 +263,7 @@ for i in range(QUANTIDADE_TRANSACOES):
     print(f"Método: {metodo}")
     print(f"Referência: {external_reference}")
 
-    # --------------------------------------------------------
     # PIX
-    # --------------------------------------------------------
 
     if metodo == "pix":
 
@@ -321,9 +274,7 @@ for i in range(QUANTIDADE_TRANSACOES):
 
         quantidade_pix += 1
 
-    # --------------------------------------------------------
     # MASTERCARD
-    # --------------------------------------------------------
 
     elif metodo == "mastercard":
 
@@ -335,9 +286,7 @@ for i in range(QUANTIDADE_TRANSACOES):
 
         quantidade_mastercard += 1
 
-    # --------------------------------------------------------
     # VISA
-    # --------------------------------------------------------
 
     elif metodo == "visa":
 
@@ -349,9 +298,7 @@ for i in range(QUANTIDADE_TRANSACOES):
 
         quantidade_visa += 1
 
-    # --------------------------------------------------------
-    # Verificação da resposta
-    # --------------------------------------------------------
+    # Verificar resposta
 
     print(f"HTTP Status: {response.status_code}")
 
@@ -377,9 +324,7 @@ for i in range(QUANTIDADE_TRANSACOES):
         f"{dados_order.get('status_detail')}"
     )
 
-    # --------------------------------------------------------
     # Salva JSON bruto
-    # --------------------------------------------------------
 
     caminho_arquivo = (
         Path(VOLUME_RAW)
@@ -402,9 +347,7 @@ for i in range(QUANTIDADE_TRANSACOES):
     print(f"Arquivo salvo em:")
     print(caminho_arquivo)
 
-    # --------------------------------------------------------
     # Guarda resultado
-    # --------------------------------------------------------
 
     resultados.append({
         "order_id": order_id,
@@ -415,10 +358,7 @@ for i in range(QUANTIDADE_TRANSACOES):
         "external_reference": external_reference
     })
 
-
-# ============================================================
 # RESUMO
-# ============================================================
 
 print()
 print()
