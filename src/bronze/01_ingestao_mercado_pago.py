@@ -1,26 +1,32 @@
 import json
+import random
 import uuid
 from pathlib import Path
+
 import requests
 
 
 # ============================================================
-# CONFIGURAÇÃO
+# CONFIGURAÇÕES
 # ============================================================
 
-# Volume do Unity Catalog
+URL_BASE = "https://api.mercadopago.com"
+
+URL_CARD_TOKEN = f"{URL_BASE}/v1/card_tokens"
+URL_ORDERS = f"{URL_BASE}/v1/orders"
+
 PASTA_BRONZE = Path(
     "/Volumes/tcc_unifor/bronze/raw_files/mercado_pago"
 )
 
-PASTA_BRONZE.mkdir(
-    parents=True,
-    exist_ok=True
-)
+QUANTIDADE_TRANSACOES = 20
+
+VALOR_MINIMO = 20.00
+VALOR_MAXIMO = 1000.00
 
 
 # ============================================================
-# CREDENCIAIS
+# TOKEN DO MERCADO PAGO
 # ============================================================
 
 MERCADO_PAGO_ACCESS_TOKEN = dbutils.secrets.get(
@@ -29,78 +35,110 @@ MERCADO_PAGO_ACCESS_TOKEN = dbutils.secrets.get(
     key="mercado_pago_access_token"
 )
 
-if not MERCADO_PAGO_ACCESS_TOKEN:
-    raise ValueError(
-        "Variável MERCADO_PAGO_ACCESS_TOKEN não encontrada."
-    )
 
-
-# ============================================================
-# API
-# ============================================================
-
-URL_API = "https://api.mercadopago.com/v1/orders"
-
-
-# ============================================================
-# NOVA LEVA DE VALORES PARA TESTE
-# ============================================================
-
-VALORES = [
-    35.50,
-    80.00,
-    135.75,
-    175.00,
-    225.90,
-    275.00,
-    325.50,
-    400.00,
-    450.75,
-    600.00,
-]
-
-
-# ============================================================
-# CABEÇALHOS
-# ============================================================
-
-headers = {
+HEADERS = {
     "Authorization": f"Bearer {MERCADO_PAGO_ACCESS_TOKEN}",
-    "Content-Type": "application/json",
+    "Content-Type": "application/json"
 }
 
 
 # ============================================================
-# INÍCIO
+# CARTÃO MASTERCARD DE TESTE
 # ============================================================
 
-print("=" * 70)
-print("INGESTÃO DE TRANSAÇÕES — MERCADO PAGO")
-print("=" * 70)
+CARD_NUMBER = "5480832801033311"
+SECURITY_CODE = "123"
 
-print(f"\nEndpoint: POST {URL_API}")
-print(f"\nDestino Bronze: {PASTA_BRONZE}")
-print(f"\nQuantidade de novas transações: {len(VALORES)}")
+EXPIRATION_MONTH = 11
+EXPIRATION_YEAR = 2030
 
+CARDHOLDER_NAME = "APRO"
 
-sucessos = 0
-erros = 0
-arquivos_criados = []
+CARDHOLDER_IDENTIFICATION = {
+    "type": "CPF",
+    "number": "12345678909"
+}
 
 
 # ============================================================
-# PROCESSAMENTO
+# CRIAÇÃO DA PASTA BRONZE
 # ============================================================
 
-for indice, valor in enumerate(VALORES, start=1):
+PASTA_BRONZE.mkdir(
+    parents=True,
+    exist_ok=True
+)
 
-    # --------------------------------------------------------
-    # NOVA REFERÊNCIA PARA A SEGUNDA LEVA
-    # --------------------------------------------------------
 
-    external_reference = (
-        f"TCC-TESTE-2-{indice:03d}"
+# ============================================================
+# FUNÇÃO — GERAR VALOR ALEATÓRIO
+# ============================================================
+
+def gerar_valor_aleatorio():
+    return round(
+        random.uniform(
+            VALOR_MINIMO,
+            VALOR_MAXIMO
+        ),
+        2
     )
+
+
+# ============================================================
+# FUNÇÃO — GERAR CARD TOKEN
+# ============================================================
+
+def gerar_card_token():
+
+    payload = {
+        "card_number": CARD_NUMBER,
+        "security_code": SECURITY_CODE,
+        "expiration_month": EXPIRATION_MONTH,
+        "expiration_year": EXPIRATION_YEAR,
+        "cardholder": {
+            "name": CARDHOLDER_NAME,
+            "identification": CARDHOLDER_IDENTIFICATION
+        }
+    }
+
+    response = requests.post(
+        URL_CARD_TOKEN,
+        headers=HEADERS,
+        json=payload,
+        timeout=30
+    )
+
+    if response.status_code != 201:
+
+        print()
+        print("ERRO AO GERAR CARD TOKEN")
+        print(f"HTTP Status: {response.status_code}")
+        print(response.text)
+
+        raise RuntimeError(
+            "Não foi possível gerar o card token."
+        )
+
+    dados = response.json()
+
+    card_token = dados.get("id")
+
+    if not card_token:
+        raise RuntimeError(
+            "A API não retornou o card token."
+        )
+
+    return card_token
+
+
+# ============================================================
+# FUNÇÃO — CRIAR ORDER PIX
+# ============================================================
+
+def criar_order_pix(
+    valor,
+    external_reference
+):
 
     payload = {
         "type": "online",
@@ -108,7 +146,7 @@ for indice, valor in enumerate(VALORES, start=1):
         "total_amount": f"{valor:.2f}",
         "external_reference": external_reference,
         "payer": {
-            "email": "test_user_br@testuser.com"
+            "email": "test@testuser.com"
         },
         "transactions": {
             "payments": [
@@ -123,281 +161,456 @@ for indice, valor in enumerate(VALORES, start=1):
         }
     }
 
-    # ========================================================
-    # IDEMPOTÊNCIA
-    # ========================================================
+    headers = {
+        **HEADERS,
+        "X-Idempotency-Key": str(uuid.uuid4())
+    }
 
-    idempotency_key = str(uuid.uuid4())
-
-    headers["X-Idempotency-Key"] = (
-        idempotency_key
+    response = requests.post(
+        URL_ORDERS,
+        headers=headers,
+        json=payload,
+        timeout=30
     )
 
-    print("\n" + "-" * 70)
+    if response.status_code not in (200, 201):
 
-    print(
-        f"Transação {indice:02d}/{len(VALORES)}"
-    )
+        print()
+        print("ERRO AO CRIAR ORDER PIX")
+        print(f"HTTP Status: {response.status_code}")
+        print(response.text)
 
-    print(
-        f"Valor: R$ {valor:.2f}"
-    )
-
-    print(
-        f"Referência: {external_reference}"
-    )
-
-    try:
-
-        # ====================================================
-        # REQUISIÇÃO À API
-        # ====================================================
-
-        response = requests.post(
-            URL_API,
-            headers=headers,
-            json=payload,
-            timeout=30
+        raise RuntimeError(
+            "Não foi possível criar a Order Pix."
         )
 
-        # ====================================================
-        # SUCESSO
-        # ====================================================
-
-        if response.ok:
-
-            dados = response.json()
-
-            order_id = dados.get("id")
-
-            # ------------------------------------------------
-            # VALIDAÇÃO DO ID RETORNADO
-            # ------------------------------------------------
-
-            if not order_id:
-
-                erros += 1
-
-                print(
-                    "✗ A API respondeu com sucesso, "
-                    "mas não retornou o Order ID."
-                )
-
-                continue
-
-            # ------------------------------------------------
-            # NOME ÚNICO DO ARQUIVO
-            # ------------------------------------------------
-
-            nome_arquivo = (
-                f"order_{order_id}.json"
-            )
-
-            caminho_arquivo = (
-                PASTA_BRONZE
-                / nome_arquivo
-            )
-
-            # ------------------------------------------------
-            # PROTEÇÃO CONTRA SOBRESCRITA
-            # ------------------------------------------------
-
-            if caminho_arquivo.exists():
-
-                print(
-                    "⚠ Arquivo já existe."
-                )
-
-                print(
-                    f"  Arquivo: {nome_arquivo}"
-                )
-
-                print(
-                    "  Registro não será sobrescrito."
-                )
-
-                continue
-
-            # ------------------------------------------------
-            # GRAVAÇÃO DO JSON BRUTO
-            # ------------------------------------------------
-
-            with open(
-                caminho_arquivo,
-                "w",
-                encoding="utf-8"
-            ) as arquivo:
-
-                json.dump(
-                    dados,
-                    arquivo,
-                    ensure_ascii=False,
-                    indent=2
-                )
-
-            sucessos += 1
-
-            arquivos_criados.append(
-                nome_arquivo
-            )
-
-            print(
-                "✓ Requisição realizada com sucesso"
-            )
-
-            print(
-                f"  HTTP: {response.status_code}"
-            )
-
-            print(
-                f"  Order ID: {order_id}"
-            )
-
-            print(
-                f"  Status: {dados.get('status')}"
-            )
-
-            print(
-                f"  Arquivo: {nome_arquivo}"
-            )
-
-        # ====================================================
-        # ERRO DA API
-        # ====================================================
-
-        else:
-
-            erros += 1
-
-            print(
-                "✗ Erro retornado pela API"
-            )
-
-            print(
-                f"  HTTP: {response.status_code}"
-            )
-
-            try:
-
-                erro_api = response.json()
-
-                print(
-                    json.dumps(
-                        erro_api,
-                        ensure_ascii=False,
-                        indent=2
-                    )
-                )
-
-            except ValueError:
-
-                print(
-                    response.text
-                )
-
-    # ========================================================
-    # TIMEOUT
-    # ========================================================
-
-    except requests.exceptions.Timeout:
-
-        erros += 1
-
-        print(
-            "✗ Timeout na requisição."
-        )
-
-    # ========================================================
-    # ERRO DE COMUNICAÇÃO
-    # ========================================================
-
-    except requests.exceptions.RequestException as erro:
-
-        erros += 1
-
-        print(
-            "✗ Erro de comunicação com a API."
-        )
-
-        print(
-            f"  {erro}"
-        )
-
-    # ========================================================
-    # ERRO AO INTERPRETAR RESPOSTA
-    # ========================================================
-
-    except ValueError as erro:
-
-        erros += 1
-
-        print(
-            "✗ Resposta inválida da API."
-        )
-
-        print(
-            f"  {erro}"
-        )
+    return response.json()
 
 
 # ============================================================
-# RESUMO
+# FUNÇÃO — CRIAR ORDER MASTERCARD
 # ============================================================
 
-print("\n" + "=" * 70)
+def criar_order_mastercard(
+    valor,
+    external_reference,
+    card_token
+):
+
+    payload = {
+        "type": "online",
+        "processing_mode": "automatic",
+        "total_amount": f"{valor:.2f}",
+        "external_reference": external_reference,
+        "payer": {
+            "email": "test@testuser.com"
+        },
+        "transactions": {
+            "payments": [
+                {
+                    "amount": f"{valor:.2f}",
+                    "payment_method": {
+                        "id": "master",
+                        "type": "credit_card",
+                        "token": card_token,
+                        "installments": 1
+                    }
+                }
+            ]
+        }
+    }
+
+    headers = {
+        **HEADERS,
+        "X-Idempotency-Key": str(uuid.uuid4())
+    }
+
+    response = requests.post(
+        URL_ORDERS,
+        headers=headers,
+        json=payload,
+        timeout=30
+    )
+
+    if response.status_code not in (200, 201):
+
+        print()
+        print("ERRO AO CRIAR ORDER MASTERCARD")
+        print(f"HTTP Status: {response.status_code}")
+        print(response.text)
+
+        raise RuntimeError(
+            "Não foi possível criar a Order Mastercard."
+        )
+
+    return response.json()
+
+
+# ============================================================
+# INÍCIO DA INGESTÃO
+# ============================================================
+
+print("=" * 70)
+print("INGESTÃO — MERCADO PAGO")
+print("=" * 70)
+
+print()
+print(f"Quantidade de transações: {QUANTIDADE_TRANSACOES}")
+print(
+    f"Faixa de valores: "
+    f"R$ {VALOR_MINIMO:.2f} "
+    f"até "
+    f"R$ {VALOR_MAXIMO:.2f}"
+)
+
+print()
+print("Métodos disponíveis:")
+print(" - Pix")
+print(" - Mastercard")
+
+
+# ============================================================
+# CONTADORES
+# ============================================================
+
+quantidade_pix = 0
+quantidade_mastercard = 0
+
+valor_total_pix = 0.00
+valor_total_mastercard = 0.00
+
+transacoes_processadas = []
+
+
+# ============================================================
+# GERAÇÃO DAS TRANSAÇÕES
+# ============================================================
+
+for numero in range(
+    1,
+    QUANTIDADE_TRANSACOES + 1
+):
+
+    print()
+    print("-" * 70)
+    print(
+        f"TRANSAÇÃO {numero}/{QUANTIDADE_TRANSACOES}"
+    )
+    print("-" * 70)
+
+    # --------------------------------------------------------
+    # Escolher método aleatoriamente
+    # --------------------------------------------------------
+
+    metodo = random.choice(
+        [
+            "pix",
+            "mastercard"
+        ]
+    )
+
+    # --------------------------------------------------------
+    # Gerar valor aleatório
+    # --------------------------------------------------------
+
+    valor = gerar_valor_aleatorio()
+
+    external_reference = (
+        f"TCC-ALEATORIO-"
+        f"{uuid.uuid4().hex[:8].upper()}"
+    )
+
+    print(
+        f"Método escolhido: "
+        f"{metodo.upper()}"
+    )
+
+    print(
+        f"Valor: "
+        f"R$ {valor:.2f}"
+    )
+
+    print(
+        f"Referência: "
+        f"{external_reference}"
+    )
+
+
+    # ========================================================
+    # PIX
+    # ========================================================
+
+    if metodo == "pix":
+
+        dados_order = criar_order_pix(
+            valor=valor,
+            external_reference=external_reference
+        )
+
+        quantidade_pix += 1
+
+        valor_total_pix += valor
+
+
+    # ========================================================
+    # MASTERCARD
+    # ========================================================
+
+    else:
+
+        print(
+            "Gerando card token..."
+        )
+
+        card_token = gerar_card_token()
+
+        print(
+            "Card token gerado com sucesso."
+        )
+
+        dados_order = criar_order_mastercard(
+            valor=valor,
+            external_reference=external_reference,
+            card_token=card_token
+        )
+
+        quantidade_mastercard += 1
+
+        valor_total_mastercard += valor
+
+
+    # ========================================================
+    # VALIDAR ID DA ORDER
+    # ========================================================
+
+    order_id = dados_order.get("id")
+
+    if not order_id:
+
+        print()
+        print(
+            "Resposta recebida pela API:"
+        )
+
+        print(
+            json.dumps(
+                dados_order,
+                indent=4,
+                ensure_ascii=False
+            )
+        )
+
+        raise RuntimeError(
+            "A API não retornou o ID da Order."
+        )
+
+
+    # ========================================================
+    # SALVAR JSON BRUTO
+    # ========================================================
+
+    arquivo = (
+        PASTA_BRONZE /
+        f"order_{order_id}.json"
+    )
+
+    with open(
+        arquivo,
+        "w",
+        encoding="utf-8"
+    ) as f:
+
+        json.dump(
+            dados_order,
+            f,
+            indent=4,
+            ensure_ascii=False
+        )
+
+
+    # ========================================================
+    # RESULTADO DA TRANSAÇÃO
+    # ========================================================
+
+    status = dados_order.get(
+        "status"
+    )
+
+    status_detail = dados_order.get(
+        "status_detail"
+    )
+
+    print()
+    print(
+        f"Order criada: {order_id}"
+    )
+
+    print(
+        f"Status: {status}"
+    )
+
+    print(
+        f"Status detalhe: {status_detail}"
+    )
+
+    print(
+        f"Arquivo salvo: {arquivo.name}"
+    )
+
+
+    # ========================================================
+    # GUARDAR RESUMO
+    # ========================================================
+
+    transacoes_processadas.append(
+        {
+            "numero": numero,
+            "metodo": metodo,
+            "valor": valor,
+            "order_id": order_id,
+            "status": status,
+            "status_detail": status_detail
+        }
+    )
+
+
+# ============================================================
+# RESUMO FINAL
+# ============================================================
+
+valor_total = (
+    valor_total_pix +
+    valor_total_mastercard
+)
+
+quantidade_total = (
+    quantidade_pix +
+    quantidade_mastercard
+)
+
+valor_medio = (
+    valor_total / quantidade_total
+    if quantidade_total > 0
+    else 0
+)
+
+
+print()
+print()
+print("=" * 70)
 print("RESUMO DA INGESTÃO")
 print("=" * 70)
 
+print()
 print(
-    f"\nTransações solicitadas: {len(VALORES)}"
+    f"Total de transações: "
+    f"{quantidade_total}"
+)
+
+print()
+print("PIX")
+print(
+    f"Quantidade: "
+    f"{quantidade_pix}"
 )
 
 print(
-    f"Transações armazenadas: {sucessos}"
+    f"Valor total: "
+    f"R$ {valor_total_pix:.2f}"
+)
+
+print()
+print("MASTERCARD")
+print(
+    f"Quantidade: "
+    f"{quantidade_mastercard}"
 )
 
 print(
-    f"Transações com erro: {erros}"
+    f"Valor total: "
+    f"R$ {valor_total_mastercard:.2f}"
+)
+
+print()
+print("TOTAL")
+
+print(
+    f"Quantidade: "
+    f"{quantidade_total}"
 )
 
 print(
-    f"\nNovos arquivos criados: {len(arquivos_criados)}"
+    f"Valor total: "
+    f"R$ {valor_total:.2f}"
 )
 
 print(
-    f"\nDiretório Bronze: {PASTA_BRONZE}"
+    f"Valor médio: "
+    f"R$ {valor_medio:.2f}"
 )
 
 
 # ============================================================
-# ARQUIVOS CRIADOS
+# DISTRIBUIÇÃO
 # ============================================================
 
-if arquivos_criados:
+print()
+print("=" * 70)
+print("DISTRIBUIÇÃO DOS MÉTODOS")
+print("=" * 70)
 
-    print("\nArquivos armazenados:")
+if quantidade_total > 0:
 
-    for arquivo in arquivos_criados:
-
-        print(
-            f"  ✓ {arquivo}"
-        )
-
-
-# ============================================================
-# CONCLUSÃO
-# ============================================================
-
-if erros == 0:
-
-    print(
-        "\n✓ INGESTÃO CONCLUÍDA COM SUCESSO."
+    percentual_pix = (
+        quantidade_pix /
+        quantidade_total *
+        100
     )
 
-else:
-
-    print(
-        "\n⚠ INGESTÃO CONCLUÍDA COM ERROS."
+    percentual_mastercard = (
+        quantidade_mastercard /
+        quantidade_total *
+        100
     )
 
-print("\n" + "=" * 70)
+    print(
+        f"Pix: "
+        f"{quantidade_pix} "
+        f"({percentual_pix:.1f}%)"
+    )
+
+    print(
+        f"Mastercard: "
+        f"{quantidade_mastercard} "
+        f"({percentual_mastercard:.1f}%)"
+    )
+
+
+# ============================================================
+# TABELA RESUMIDA DAS TRANSAÇÕES
+# ============================================================
+
+print()
+print("=" * 70)
+print("TRANSAÇÕES GERADAS")
+print("=" * 70)
+
+for transacao in transacoes_processadas:
+
+    print(
+        f"{transacao['numero']:02d} | "
+        f"{transacao['metodo'].upper():12s} | "
+        f"R$ {transacao['valor']:8.2f} | "
+        f"{transacao['status']:16s} | "
+        f"{transacao['order_id']}"
+    )
+
+
+# ============================================================
+# FINAL
+# ============================================================
+
+print()
+print("=" * 70)
+print("INGESTÃO CONCLUÍDA COM SUCESSO")
+print("=" * 70)

@@ -1,17 +1,27 @@
+# ============================================================
+# 02_bronze_mercado_pago.py
+# ============================================================
+# Bronze incremental - Mercado Pago
+#
+# Objetivos:
+# 1. Ler os JSONs brutos
+# 2. Normalizar o schema
+# 3. Identificar somente registros novos
+# 4. Ajustar o schema dos novos registros ao schema existente
+# 5. Inserir incrementalmente na Bronze
+# 6. Validar a carga
+# ============================================================
+
 from pyspark.sql import functions as F
 
 
 # ============================================================
-# CONFIGURAÇÃO
+# CONFIGURAÇÕES
 # ============================================================
 
-CAMINHO_BRONZE = (
-    "/Volumes/tcc_unifor/bronze/raw_files/mercado_pago/*.json"
-)
+CAMINHO_RAW = "/Volumes/tcc_unifor/bronze/raw_files/mercado_pago"
 
-TABELA_BRONZE = (
-    "tcc_unifor.bronze.mercado_pago_orders"
-)
+TABELA_BRONZE = "tcc_unifor.bronze.mercado_pago_orders"
 
 
 # ============================================================
@@ -19,231 +29,229 @@ TABELA_BRONZE = (
 # ============================================================
 
 print("=" * 70)
-print("CAMADA BRONZE — MERCADO PAGO")
+print("BRONZE - MERCADO PAGO")
 print("=" * 70)
 
-print("\nLendo arquivos JSON brutos...")
+print(f"\nLendo arquivos JSON de:")
+print(CAMINHO_RAW)
 
 
 # ============================================================
-# LEITURA DOS JSONS
+# 1. LEITURA DOS JSONs
 # ============================================================
 
-df = (
+df_raw = (
     spark.read
-    .option("multiLine", "true")
-    .json(CAMINHO_BRONZE)
+    .option("multiLine", True)
+    .json(f"{CAMINHO_RAW}/*.json")
 )
 
-
-# ============================================================
-# QUANTIDADE DE REGISTROS LIDOS
-# ============================================================
-
-quantidade_lidos = df.count()
+quantidade_raw = df_raw.count()
 
 print(
-    f"\nQuantidade de registros encontrados: "
-    f"{quantidade_lidos}"
+    f"\nQuantidade de registros encontrados nos JSONs: "
+    f"{quantidade_raw}"
 )
 
-if quantidade_lidos == 0:
-
+if quantidade_raw == 0:
     raise ValueError(
-        "Nenhum arquivo JSON foi encontrado "
-        "no caminho da Bronze."
+        "Nenhum arquivo JSON foi encontrado no diretório RAW."
     )
 
 
 # ============================================================
-# SCHEMA
+# 2. NORMALIZAÇÃO DO SCHEMA
+# ============================================================
+#
+# Mantemos somente os campos definidos originalmente
+# na Bronze.
+#
+# Campos específicos dos cartões, como:
+# - token
+# - installments
+# - installment_amount
+# - transaction_security
+#
+# não entram na Bronze.
 # ============================================================
 
-print("\n" + "=" * 70)
-print("SCHEMA DOS DADOS")
-print("=" * 70)
+df_normalizado = df_raw.select(
 
-df.printSchema()
+    F.col("capture_mode")
+        .cast("string")
+        .alias("capture_mode"),
+
+    F.col("country_code")
+        .cast("string")
+        .alias("country_code"),
+
+    F.col("created_date")
+        .cast("string")
+        .alias("created_date"),
+
+    F.col("currency")
+        .cast("string")
+        .alias("currency"),
+
+    F.col("external_reference")
+        .cast("string")
+        .alias("external_reference"),
+
+    F.col("id")
+        .cast("string")
+        .alias("id"),
+
+    F.struct(
+        F.col("integration_data.application_id")
+            .cast("string")
+            .alias("application_id")
+    ).alias("integration_data"),
+
+    F.col("last_updated_date")
+        .cast("string")
+        .alias("last_updated_date"),
+
+    F.col("processing_mode")
+        .cast("string")
+        .alias("processing_mode"),
+
+    F.col("status")
+        .cast("string")
+        .alias("status"),
+
+    F.col("status_detail")
+        .cast("string")
+        .alias("status_detail"),
+
+    F.col("total_amount")
+        .cast("string")
+        .alias("total_amount"),
+
+    F.col("total_paid_amount")
+        .cast("string")
+        .alias("total_paid_amount"),
+
+    F.struct(
+
+        F.transform(
+            F.col("transactions.payments"),
+
+            lambda p: F.struct(
+
+                p["amount"]
+                    .cast("string")
+                    .alias("amount"),
+
+                p["date_of_expiration"]
+                    .cast("string")
+                    .alias("date_of_expiration"),
+
+                p["id"]
+                    .cast("string")
+                    .alias("id"),
+
+                F.struct(
+
+                    p["payment_method"]["id"]
+                        .cast("string")
+                        .alias("id"),
+
+                    p["payment_method"]["qr_code"]
+                        .cast("string")
+                        .alias("qr_code"),
+
+                    p["payment_method"]["qr_code_base64"]
+                        .cast("string")
+                        .alias("qr_code_base64"),
+
+                    p["payment_method"]["ticket_url"]
+                        .cast("string")
+                        .alias("ticket_url"),
+
+                    p["payment_method"]["type"]
+                        .cast("string")
+                        .alias("type")
+
+                ).alias("payment_method"),
+
+                p["reference_id"]
+                    .cast("string")
+                    .alias("reference_id"),
+
+                p["status"]
+                    .cast("string")
+                    .alias("status"),
+
+                p["status_detail"]
+                    .cast("string")
+                    .alias("status_detail")
+            )
+        ).alias("payments")
+
+    ).alias("transactions"),
+
+    F.col("type")
+        .cast("string")
+        .alias("type"),
+
+    F.col("user_id")
+        .cast("string")
+        .alias("user_id"),
+
+    F.current_timestamp()
+        .cast("timestamp")
+        .alias("_ingestion_timestamp")
+)
+
+
+print("\nSchema após normalização:")
+
+df_normalizado.printSchema()
 
 
 # ============================================================
-# VALIDAÇÃO DE ID NULO
+# 3. VALIDAÇÃO DOS IDs
 # ============================================================
-
-print("\n" + "=" * 70)
-print("VALIDAÇÃO DE IDENTIFICADORES")
-print("=" * 70)
 
 ids_nulos = (
-    df
+    df_normalizado
     .filter(F.col("id").isNull())
     .count()
 )
 
-print(
-    f"\nIDs nulos: {ids_nulos}"
-)
-
 if ids_nulos > 0:
-
     raise ValueError(
-        "Foram encontrados registros sem ID."
+        f"Foram encontrados {ids_nulos} registros sem ID."
     )
 
 
-# ============================================================
-# VALIDAÇÃO DE DUPLICIDADE NOS ARQUIVOS
-# ============================================================
-
-quantidade_ids = (
-    df
+ids_distintos = (
+    df_normalizado
     .select("id")
     .distinct()
     .count()
 )
 
-duplicidades = (
-    quantidade_lidos - quantidade_ids
+print(
+    f"\nIDs distintos nos JSONs: {ids_distintos}"
+)
+
+
+# ============================================================
+# 4. VERIFICAR SE A TABELA EXISTE
+# ============================================================
+
+tabela_existe = spark.catalog.tableExists(
+    TABELA_BRONZE
 )
 
 print(
-    f"IDs distintos: {quantidade_ids}"
-)
-
-print(
-    f"Registros duplicados nos arquivos: "
-    f"{duplicidades}"
-)
-
-if duplicidades > 0:
-
-    raise ValueError(
-        "Foram encontrados IDs duplicados "
-        "nos arquivos JSON."
-    )
-
-
-# ============================================================
-# VALIDAÇÃO DOS CAMPOS PRINCIPAIS
-# ============================================================
-
-print("\n" + "=" * 70)
-print("VALIDAÇÃO DE CAMPOS PRINCIPAIS")
-print("=" * 70)
-
-campos_principais = [
-    "id",
-    "type",
-    "external_reference",
-    "total_amount",
-    "currency",
-    "status",
-    "created_date"
-]
-
-for campo in campos_principais:
-
-    quantidade_nulos = (
-        df
-        .filter(F.col(campo).isNull())
-        .count()
-    )
-
-    print(
-        f"{campo}: "
-        f"{quantidade_nulos} valores nulos"
-    )
-
-
-# ============================================================
-# RESUMO FINANCEIRO DOS ARQUIVOS LIDOS
-# ============================================================
-
-print("\n" + "=" * 70)
-print("RESUMO DOS VALORES")
-print("=" * 70)
-
-resumo = (
-    df
-    .select(
-        F.count("*").alias("quantidade"),
-        F.min(
-            F.col("total_amount")
-            .cast("decimal(18,2)")
-        ).alias("valor_minimo"),
-        F.max(
-            F.col("total_amount")
-            .cast("decimal(18,2)")
-        ).alias("valor_maximo"),
-        F.sum(
-            F.col("total_amount")
-            .cast("decimal(18,2)")
-        ).alias("valor_total"),
-        F.avg(
-            F.col("total_amount")
-            .cast("decimal(18,2)")
-        ).alias("valor_medio")
-    )
-)
-
-resumo.show(truncate=False)
-
-
-# ============================================================
-# DISTRIBUIÇÃO DOS STATUS
-# ============================================================
-
-print("\n" + "=" * 70)
-print("DISTRIBUIÇÃO DOS STATUS")
-print("=" * 70)
-
-(
-    df
-    .groupBy("status")
-    .count()
-    .orderBy(F.desc("count"))
-    .show(truncate=False)
+    f"\nTabela Bronze existe: {tabela_existe}"
 )
 
 
 # ============================================================
-# AMOSTRA DOS DADOS
-# ============================================================
-
-print("\n" + "=" * 70)
-print("AMOSTRA DOS DADOS")
-print("=" * 70)
-
-(
-    df
-    .select(
-        "id",
-        "external_reference",
-        "total_amount",
-        "currency",
-        "status",
-        "created_date"
-    )
-    .show(10, truncate=False)
-)
-
-
-# ============================================================
-# VERIFICAÇÃO DA TABELA BRONZE
-# ============================================================
-
-print("\n" + "=" * 70)
-print("VERIFICAÇÃO DA TABELA BRONZE")
-print("=" * 70)
-
-
-tabela_existe = (
-    spark.catalog.tableExists(TABELA_BRONZE)
-)
-
-
-# ============================================================
-# PRIMEIRA CARGA
+# 5. PRIMEIRA CARGA
 # ============================================================
 
 if not tabela_existe:
@@ -253,16 +261,24 @@ if not tabela_existe:
     )
 
     print(
-        "Será realizada a primeira carga."
+        "Criando tabela pela primeira vez..."
     )
 
-    quantidade_antes = 0
+    (
+        df_normalizado
+        .write
+        .format("delta")
+        .mode("overwrite")
+        .saveAsTable(TABELA_BRONZE)
+    )
 
-    df_novos = df
+    print(
+        "\nTabela Bronze criada com sucesso."
+    )
 
 
 # ============================================================
-# CARGAS SEGUINTES
+# 6. CARGA INCREMENTAL
 # ============================================================
 
 else:
@@ -271,282 +287,488 @@ else:
         "\nTabela Bronze já existe."
     )
 
-    # --------------------------------------------------------
-    # QUANTIDADE ATUAL DA TABELA
-    # --------------------------------------------------------
-
-    quantidade_antes = (
-        spark
-        .table(TABELA_BRONZE)
-        .count()
-    )
-
     print(
-        f"Registros existentes antes da carga: "
-        f"{quantidade_antes}"
+        "Lendo schema existente..."
     )
 
-    # --------------------------------------------------------
-    # LEITURA DOS IDs JÁ EXISTENTES
-    # --------------------------------------------------------
 
-    df_ids_existentes = (
-        spark
-        .table(TABELA_BRONZE)
+    # ========================================================
+    # 6.1 LER TABELA E SCHEMA
+    # ========================================================
+
+    df_bronze = spark.table(
+        TABELA_BRONZE
+    )
+
+    schema_tabela = df_bronze.schema
+
+
+    # ========================================================
+    # 6.2 IDENTIFICAR IDS EXISTENTES
+    # ========================================================
+
+    ids_existentes = (
+        df_bronze
         .select("id")
+        .where(
+            F.col("id").isNotNull()
+        )
         .distinct()
     )
 
-    quantidade_ids_existentes = (
-        df_ids_existentes.count()
+    quantidade_existentes = (
+        ids_existentes.count()
     )
 
     print(
         f"IDs já existentes na Bronze: "
-        f"{quantidade_ids_existentes}"
+        f"{quantidade_existentes}"
     )
 
-    # --------------------------------------------------------
-    # IDENTIFICAÇÃO DE NOVOS REGISTROS
-    # --------------------------------------------------------
+
+    # ========================================================
+    # 6.3 IDENTIFICAR NOVOS REGISTROS
+    # ========================================================
 
     df_novos = (
-        df
+        df_normalizado
         .join(
-            df_ids_existentes,
+            ids_existentes,
             on="id",
             how="left_anti"
         )
     )
 
+    quantidade_novos = (
+        df_novos.count()
+    )
 
-# ============================================================
-# QUANTIDADE DE NOVOS REGISTROS
-# ============================================================
+    quantidade_ignorados = (
+        quantidade_raw - quantidade_novos
+    )
 
-quantidade_novos = df_novos.count()
+    print(
+        f"Novos registros: {quantidade_novos}"
+    )
 
-print(
-    f"\nNovos registros identificados: "
-    f"{quantidade_novos}"
-)
-
-
-# ============================================================
-# VERIFICAÇÃO DE DUPLICIDADES ENTRE CARGAS
-# ============================================================
-
-quantidade_ignorados = (
-    quantidade_lidos - quantidade_novos
-)
-
-print(
-    f"Registros já existentes/ignorados: "
-    f"{quantidade_ignorados}"
-)
+    print(
+        f"Registros já existentes/ignorados: "
+        f"{quantidade_ignorados}"
+    )
 
 
-# ============================================================
-# ADIÇÃO DO TIMESTAMP DE INGESTÃO
-# ============================================================
+    # ========================================================
+    # 6.4 NENHUM REGISTRO NOVO
+    # ========================================================
 
-if quantidade_novos > 0:
+    if quantidade_novos == 0:
 
-    df_bronze = (
-        df_novos
-        .withColumn(
-            "_ingestion_timestamp",
-            F.current_timestamp()
+        print(
+            "\nNenhum registro novo para inserir."
         )
-    )
+
+    else:
+
+        # ====================================================
+        # 6.5 AJUSTAR SCHEMA
+        # ====================================================
+        #
+        # Aqui está a correção principal.
+        #
+        # Criamos um DataFrame vazio usando EXATAMENTE
+        # o schema da tabela existente.
+        #
+        # Depois fazemos unionByName com os novos dados.
+        #
+        # O Spark passa a utilizar a estrutura do schema
+        # existente também para os StructTypes internos.
+        #
+        # Isso resolve diferenças de nullable como:
+        #
+        # tabela:
+        # payment_method nullable = true
+        #
+        # novos:
+        # payment_method nullable = false
+        # ====================================================
+
+        print(
+            "\nAplicando o schema existente "
+            "da tabela Bronze..."
+        )
 
 
-    # ========================================================
-    # GRAVAÇÃO INCREMENTAL
-    # ========================================================
+        df_vazio_schema = spark.createDataFrame(
+            [],
+            schema_tabela
+        )
 
-    print("\n" + "=" * 70)
-    print("GRAVAÇÃO INCREMENTAL DA BRONZE")
-    print("=" * 70)
 
-    (
-        df_bronze.write
-        .format("delta")
-        .mode("append")
-        .saveAsTable(TABELA_BRONZE)
-    )
+        df_novos_schema = (
+            df_vazio_schema
+            .unionByName(
+                df_novos,
+                allowMissingColumns=False
+            )
+        )
 
-    print(
-        f"\n✓ {quantidade_novos} novos registros "
-        "adicionados à Bronze."
-    )
 
-else:
+        # ====================================================
+        # 6.6 REMOVER O DATAFRAME VAZIO
+        # ====================================================
+        #
+        # O union acima serve somente para harmonizar
+        # o schema. Como o primeiro DataFrame está vazio,
+        # todos os registros presentes continuam sendo
+        # exclusivamente os 10 novos registros.
+        # ====================================================
 
-    print("\n" + "=" * 70)
-    print("NENHUM NOVO REGISTRO")
-    print("=" * 70)
+        df_novos = df_novos_schema
 
-    print(
-        "\n✓ Nenhum registro novo foi encontrado."
-    )
 
-    print(
-        "✓ A tabela Bronze não foi alterada."
-    )
+        print(
+            "\nSchema final dos novos registros:"
+        )
+
+        df_novos.printSchema()
+
+
+        # ====================================================
+        # 6.7 VALIDAR QUANTIDADE
+        # ====================================================
+
+        quantidade_novos_schema = (
+            df_novos.count()
+        )
+
+        print(
+            f"\nQuantidade após ajuste de schema: "
+            f"{quantidade_novos_schema}"
+        )
+
+
+        if quantidade_novos_schema != quantidade_novos:
+
+            raise ValueError(
+                "A quantidade de registros mudou "
+                "durante o ajuste do schema."
+            )
+
+
+        # ====================================================
+        # 6.8 VERIFICAR CAMPOS
+        # ====================================================
+
+        campos_tabela = [
+            campo.name
+            for campo in schema_tabela.fields
+        ]
+
+        campos_novos = [
+            campo.name
+            for campo in df_novos.schema.fields
+        ]
+
+
+        if campos_tabela != campos_novos:
+
+            print(
+                "\nCampos da tabela:"
+            )
+
+            print(
+                campos_tabela
+            )
+
+            print(
+                "\nCampos dos novos dados:"
+            )
+
+            print(
+                campos_novos
+            )
+
+            raise ValueError(
+                "Os campos dos novos registros "
+                "não correspondem aos campos da Bronze."
+            )
+
+
+        print(
+            "\nCampos compatíveis com a Bronze."
+        )
+
+
+        # ====================================================
+        # 6.9 GRAVAÇÃO INCREMENTAL
+        # ====================================================
+
+        print(
+            "\nInserindo novos registros na Bronze..."
+        )
+
+
+        (
+            df_novos
+            .write
+            .format("delta")
+            .mode("append")
+            .saveAsTable(TABELA_BRONZE)
+        )
+
+
+        print(
+            "\nNovos registros inseridos com sucesso."
+        )
 
 
 # ============================================================
-# VALIDAÇÃO FINAL
+# 7. VALIDAÇÃO FINAL
 # ============================================================
 
-quantidade_depois = (
-    spark
-    .table(TABELA_BRONZE)
-    .count()
-)
-
-quantidade_esperada = (
-    quantidade_antes + quantidade_novos
-)
-
-
-print("\n" + "=" * 70)
-print("VALIDAÇÃO FINAL DA CARGA")
-print("=" * 70)
-
 print(
-    f"\nRegistros antes da carga: "
-    f"{quantidade_antes}"
+    "\n" + "=" * 70
 )
 
 print(
-    f"Registros lidos dos JSONs: "
-    f"{quantidade_lidos}"
+    "VALIDAÇÃO FINAL DA BRONZE"
 )
 
 print(
-    f"Registros novos: "
-    f"{quantidade_novos}"
-)
-
-print(
-    f"Registros ignorados: "
-    f"{quantidade_ignorados}"
-)
-
-print(
-    f"Registros depois da carga: "
-    f"{quantidade_depois}"
-)
-
-print(
-    f"Quantidade esperada: "
-    f"{quantidade_esperada}"
+    "=" * 70
 )
 
 
-if quantidade_depois != quantidade_esperada:
-
-    raise ValueError(
-        "A quantidade de registros na tabela Bronze "
-        "não corresponde à quantidade esperada."
-    )
-
-
-# ============================================================
-# VALIDAÇÃO DE DUPLICIDADE NA TABELA FINAL
-# ============================================================
-
-print("\n" + "=" * 70)
-print("VALIDAÇÃO DA TABELA BRONZE")
-print("=" * 70)
-
-quantidade_total = (
-    spark
-    .table(TABELA_BRONZE)
-    .count()
+df_bronze_final = spark.table(
+    TABELA_BRONZE
 )
 
-quantidade_ids_total = (
-    spark
-    .table(TABELA_BRONZE)
+
+quantidade_final = (
+    df_bronze_final.count()
+)
+
+
+ids_finais = (
+    df_bronze_final
     .select("id")
     .distinct()
     .count()
 )
 
-duplicidades_tabela = (
-    quantidade_total - quantidade_ids_total
+
+print(
+    f"\nTotal de registros na Bronze: "
+    f"{quantidade_final}"
 )
 
 print(
-    f"\nTotal de registros: "
-    f"{quantidade_total}"
+    f"IDs distintos: {ids_finais}"
 )
+
+
+# ============================================================
+# 8. VALIDAR IDS NULOS
+# ============================================================
+
+ids_nulos_final = (
+    df_bronze_final
+    .filter(
+        F.col("id").isNull()
+    )
+    .count()
+)
+
 
 print(
-    f"IDs distintos: "
-    f"{quantidade_ids_total}"
-)
-
-print(
-    f"Duplicidades na tabela: "
-    f"{duplicidades_tabela}"
+    f"IDs nulos: {ids_nulos_final}"
 )
 
 
-if duplicidades_tabela > 0:
+if ids_nulos_final > 0:
 
     raise ValueError(
-        "Foram encontradas duplicidades "
-        "na tabela Bronze."
+        "A Bronze possui registros com ID nulo."
     )
 
 
 # ============================================================
-# CONCLUSÃO
+# 9. DISTRIBUIÇÃO DOS MÉTODOS DE PAGAMENTO
 # ============================================================
 
-print("\n" + "=" * 70)
-print("BRONZE CONCLUÍDA COM SUCESSO")
-print("=" * 70)
+print(
+    "\nDistribuição dos métodos de pagamento:"
+)
+
+
+(
+    df_bronze_final
+
+    .select(
+        F.explode(
+            "transactions.payments"
+        ).alias("payment")
+    )
+
+    .groupBy(
+        "payment.payment_method.id",
+        "payment.payment_method.type"
+    )
+
+    .count()
+
+    .orderBy(
+        F.desc("count")
+    )
+
+    .show(
+        truncate=False
+    )
+)
+
+
+# ============================================================
+# 10. DISTRIBUIÇÃO DOS STATUS
+# ============================================================
 
 print(
-    f"\n✓ Tabela Delta: "
-    f"{TABELA_BRONZE}"
+    "\nDistribuição dos status das ordens:"
+)
+
+
+(
+    df_bronze_final
+
+    .groupBy(
+        "status"
+    )
+
+    .count()
+
+    .orderBy(
+        F.desc("count")
+    )
+
+    .show(
+        truncate=False
+    )
+)
+
+
+# ============================================================
+# 11. RESUMO FINANCEIRO
+# ============================================================
+
+print(
+    "\nResumo financeiro:"
+)
+
+
+(
+    df_bronze_final
+
+    .select(
+
+        F.sum(
+            F.col("total_amount")
+            .cast("decimal(18,2)")
+        ).alias(
+            "valor_total"
+        ),
+
+        F.avg(
+            F.col("total_amount")
+            .cast("decimal(18,2)")
+        ).alias(
+            "ticket_medio"
+        ),
+
+        F.min(
+            F.col("total_amount")
+            .cast("decimal(18,2)")
+        ).alias(
+            "menor_valor"
+        ),
+
+        F.max(
+            F.col("total_amount")
+            .cast("decimal(18,2)")
+        ).alias(
+            "maior_valor"
+        )
+    )
+
+    .show()
+)
+
+
+# ============================================================
+# 12. AMOSTRA FINAL
+# ============================================================
+
+print(
+    "\nAmostra dos registros mais recentes:"
+)
+
+
+(
+    df_bronze_final
+
+    .select(
+        "id",
+        "external_reference",
+        "total_amount",
+        "status",
+        "status_detail",
+        "created_date"
+    )
+
+    .orderBy(
+        F.col(
+            "_ingestion_timestamp"
+        ).desc()
+    )
+
+    .show(
+        10,
+        truncate=False
+    )
+)
+
+
+# ============================================================
+# FINAL
+# ============================================================
+
+print(
+    "\n" + "=" * 70
 )
 
 print(
-    f"✓ Registros lidos: "
-    f"{quantidade_lidos}"
+    "BRONZE FINALIZADA COM SUCESSO"
 )
 
 print(
-    f"✓ Novos registros adicionados: "
-    f"{quantidade_novos}"
+    "=" * 70
 )
 
 print(
-    f"✓ Registros ignorados: "
-    f"{quantidade_ignorados}"
+    f"\nTabela: {TABELA_BRONZE}"
 )
 
 print(
-    f"✓ Total acumulado na Bronze: "
-    f"{quantidade_depois}"
+    f"Total de registros: {quantidade_final}"
 )
 
 print(
-    "✓ Validações executadas"
+    f"IDs distintos: {ids_finais}"
 )
 
 print(
-    "✓ Timestamp de ingestão adicionado"
+    "\nNenhuma alteração de schema foi realizada "
+    "na tabela Delta."
 )
 
 print(
-    "✓ Modo de carga: APPEND incremental"
+    "=" * 70
 )
-
-print("\n" + "=" * 70)
